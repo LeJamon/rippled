@@ -969,6 +969,12 @@ Config::loadFromString(std::string const& fileContents)
                 section(SECTION_VALIDATOR_LIST_THRESHOLD)
                     .append(*valListThreshold);
 
+            auto valKeyType =
+                getIniFileSection(iniFile, SECTION_VALIDATOR_KEY_TYPE);
+
+            if (valKeyType)
+                section(SECTION_VALIDATOR_KEY_TYPE).append(*valKeyType);
+
             if (!entries && !valKeyEntries && !valListKeys)
                 Throw<std::runtime_error>(
                     "The file specified in [" SECTION_VALIDATORS_FILE
