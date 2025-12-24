@@ -31,9 +31,9 @@ ValidatorKeys::ValidatorKeys(Config const& config, beast::Journal j)
             if (!parsedKeyType)
             {
                 configInvalid_ = true;
-                JLOG(j.fatal())
-                    << "Invalid key type specified in [" SECTION_VALIDATOR_KEY_TYPE
-                       "]: " << keyTypeStr;
+                JLOG(j.fatal()) << "Invalid key type specified in "
+                                   "[" SECTION_VALIDATOR_KEY_TYPE "]: "
+                                << keyTypeStr;
                 return;
             }
             keyType = *parsedKeyType;
@@ -43,16 +43,17 @@ ValidatorKeys::ValidatorKeys(Config const& config, beast::Journal j)
         if (auto token = loadValidatorToken(
                 config.section(SECTION_VALIDATOR_TOKEN).lines()))
         {
-            auto const pk =
-                derivePublicKey(keyType, token->validationSecret);
+            auto const pk = derivePublicKey(keyType, token->validationSecret);
             auto const m = deserializeManifest(base64_decode(token->manifest));
-
             if (!m || pk != m->signingKey)
             {
                 configInvalid_ = true;
                 JLOG(j.fatal())
                     << "Invalid token specified in [" SECTION_VALIDATOR_TOKEN
-                       "]";
+                       "] "
+                    << "PublicKey:" << toBase58(TokenType::NodePublic, pk)
+                    << " KeyType: " << keyType
+                    << " Manifest: " << (m ? to_string(*m) : "null");
             }
             else
             {
@@ -66,7 +67,8 @@ ValidatorKeys::ValidatorKeys(Config const& config, beast::Journal j)
         {
             configInvalid_ = true;
             JLOG(j.fatal())
-                << "Could not load token specified in [" SECTION_VALIDATOR_TOKEN "]";
+                << "Could not load token specified in [" SECTION_VALIDATOR_TOKEN
+                   "]";
         }
     }
     else if (config.exists(SECTION_VALIDATION_SEED))
@@ -91,9 +93,9 @@ ValidatorKeys::ValidatorKeys(Config const& config, beast::Journal j)
                 if (!parsedKeyType)
                 {
                     configInvalid_ = true;
-                    JLOG(j.fatal())
-                        << "Invalid key type specified in [" SECTION_VALIDATOR_KEY_TYPE
-                           "]: " << keyTypeStr;
+                    JLOG(j.fatal()) << "Invalid key type specified in "
+                                       "[" SECTION_VALIDATOR_KEY_TYPE "]: "
+                                    << keyTypeStr;
                     return;
                 }
                 keyType = *parsedKeyType;
