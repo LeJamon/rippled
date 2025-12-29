@@ -19,9 +19,12 @@
 namespace xrpl {
 namespace test {
 
-class ValidatorList_test : public beast::unit_test::suite
+class ValidatorListV2_test : public beast::unit_test::suite
 {
 private:
+    // Test with dilithium (original ValidatorList_test covers secp256k1/ed25519)
+    KeyType currentKeyType_ = KeyType::dilithium;
+
     struct Validator
     {
         PublicKey masterPublic;
@@ -29,16 +32,16 @@ private:
         std::string manifest;
     };
 
-    static PublicKey
+    PublicKey
     randomNode()
     {
-        return derivePublicKey(KeyType::secp256k1, randomSecretKey());
+        return derivePublicKey(currentKeyType_, randomSecretKey(currentKeyType_));
     }
 
-    static PublicKey
+    PublicKey
     randomMasterKey()
     {
-        return derivePublicKey(KeyType::ed25519, randomSecretKey());
+        return derivePublicKey(currentKeyType_, randomSecretKey(currentKeyType_));
     }
 
     static std::string
@@ -92,12 +95,12 @@ private:
         return std::string(static_cast<char const*>(s.data()), s.size());
     }
 
-    static Validator
+    Validator
     randomValidator()
     {
-        auto const secret = randomSecretKey();
-        auto const masterPublic = derivePublicKey(KeyType::ed25519, secret);
-        auto const signingKeys = randomKeyPair(KeyType::secp256k1);
+        auto const secret = randomSecretKey(currentKeyType_);
+        auto const masterPublic = derivePublicKey(currentKeyType_, secret);
+        auto const signingKeys = randomKeyPair(currentKeyType_);
         return {
             masterPublic,
             signingKeys.first,
@@ -617,7 +620,7 @@ private:
 
         BEAST_EXPECT(trustedKeys->load({}, emptyCfgKeys, cfgKeys1));
 
-        std::map<std::size_t, std::vector<Validator>> const lists = []() {
+        std::map<std::size_t, std::vector<Validator>> const lists = [this]() {
             auto constexpr listSize = 20;
             auto constexpr numLists = 9;
             std::map<std::size_t, std::vector<Validator>> lists;
@@ -1019,7 +1022,7 @@ private:
 
         BEAST_EXPECT(trustedKeys->load({}, emptyCfgKeys, cfgKeys1));
 
-        std::vector<Validator> const list = []() {
+        std::vector<Validator> const list = [this]() {
             auto constexpr listSize = 20;
             std::vector<Validator> list;
             list.reserve(listSize);
@@ -4145,7 +4148,7 @@ public:
     }
 };  // namespace test
 
-BEAST_DEFINE_TESTSUITE(ValidatorList, app, xrpl);
+BEAST_DEFINE_TESTSUITE(ValidatorListV2, app, xrpl);
 
 }  // namespace test
 }  // namespace xrpl

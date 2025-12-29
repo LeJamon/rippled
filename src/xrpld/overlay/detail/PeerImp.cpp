@@ -108,6 +108,22 @@ PeerImp::PeerImp(
           app_.config().LEDGER_REPLAY))
     , ledgerReplayMsgHandler_(app, app.getLedgerReplayer())
 {
+    // Increase TCP buffer sizes for quantum signature support
+    // Default macOS buffers are only 128KB, which can cause "stream truncated"
+    // errors when multiple validators send large quantum signatures simultaneously
+    try
+    {
+        constexpr int bufferSize = 1024 * 1024;  // 1 MB
+        socket_.set_option(
+            boost::asio::socket_base::send_buffer_size(bufferSize));
+        socket_.set_option(
+            boost::asio::socket_base::receive_buffer_size(bufferSize));
+    }
+    catch (std::exception const& e)
+    {
+        JLOG(journal_.warn()) << "Failed to set socket buffer sizes: " << e.what();
+    }
+
     JLOG(journal_.info())
         << "compression enabled " << (compressionEnabled_ == Compressed::On)
         << " vp reduce-relay base squelch enabled "

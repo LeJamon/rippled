@@ -338,16 +338,19 @@ ValidatorSite::onRequestTimeout(std::size_t siteIdx, error_code const& ec)
 void
 ValidatorSite::onTimer(std::size_t siteIdx, error_code const& ec)
 {
-    JLOG(j_.debug()) << "ValidatorSite::onTimer() called for site[" << siteIdx << "], ec=" << ec.message();
     if (ec)
     {
-        JLOG(j_.debug()) << "onTimer: error code indicates timer was cancelled or failed: " << ec.message();
-        // Restart the timer if any errors are encountered, unless the error
-        // is from the wait operation being aborted due to a shutdown request.
+        // Timer was cancelled or failed - don't access any member variables
+        // before checking the error code to avoid use-after-free during shutdown
         if (ec != boost::asio::error::operation_aborted)
+        {
+            JLOG(j_.debug()) << "onTimer: restarting after error: " << ec.message();
             onSiteFetch(ec, {}, detail::response_type{}, siteIdx);
+        }
         return;
     }
+
+    JLOG(j_.debug()) << "ValidatorSite::onTimer() called for site[" << siteIdx << "]";
 
     try
     {
