@@ -28,6 +28,8 @@ install (
     xrpl.libxrpl.shamap
     antithesis-sdk-cpp
     randombytes_ref
+    ff
+    zm
   EXPORT XrplExports
   LIBRARY DESTINATION lib
   ARCHIVE DESTINATION lib

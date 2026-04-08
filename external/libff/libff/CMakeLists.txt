@@ -77,7 +77,9 @@ target_link_libraries(
 )
 target_include_directories(
   ff
-  PUBLIC ..
+  PUBLIC
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/..>
+    $<INSTALL_INTERFACE:include>
 )
 
 # Sodium for binary fields.
@@ -97,7 +99,7 @@ target_include_directories(
  target_include_directories(
    ff
    PUBLIC
-   ${SODIUM_INCLUDE_DIR}
+   $<BUILD_INTERFACE:${SODIUM_INCLUDE_DIR}>
  )
  target_compile_options(
    ff

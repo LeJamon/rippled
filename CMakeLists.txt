@@ -169,9 +169,6 @@ target_link_libraries(xrpl_libs INTERFACE
   secp256k1::secp256k1
   soci::soci
   SQLite::SQLite3
-  libff::ff
-  GMP::gmp
-  GMP::gmpxx
 )
 
 # Work around changes to Conan recipe for now.
