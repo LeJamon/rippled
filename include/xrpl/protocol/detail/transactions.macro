@@ -901,6 +901,7 @@ TRANSACTION(ttVAULT_CREATE, 65, VaultCreate,
     {sfWithdrawalPolicy, soeOPTIONAL},
     {sfData, soeOPTIONAL},
     {sfScale, soeOPTIONAL},
+    {sfVaultCode, soeOPTIONAL},
 }))
 
 /** This transaction updates a single asset vault. */
@@ -944,6 +945,7 @@ TRANSACTION(ttVAULT_DEPOSIT, 68, VaultDeposit,
     ({
     {sfVaultID, soeREQUIRED},
     {sfAmount, soeREQUIRED, soeMPTSupported},
+    {sfComputationAllowance, soeOPTIONAL},
 }))
 
 /** This transaction trades shares for assets with a vault. */
@@ -960,6 +962,7 @@ TRANSACTION(ttVAULT_WITHDRAW, 69, VaultWithdraw,
     {sfAmount, soeREQUIRED, soeMPTSupported},
     {sfDestination, soeOPTIONAL},
     {sfDestinationTag, soeOPTIONAL},
+    {sfComputationAllowance, soeOPTIONAL},
 }))
 
 /** This transaction claws back tokens from a vault. */

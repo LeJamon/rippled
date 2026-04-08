@@ -1,15 +1,46 @@
 #include <xrpld/app/tx/detail/VaultWithdraw.h>
+#include <xrpld/app/wasm/HostFuncImpl.h>
+#include <xrpld/app/wasm/WasmVM.h>
 
 #include <xrpl/ledger/CredentialHelpers.h>
 #include <xrpl/ledger/View.h>
 #include <xrpl/protocol/AccountID.h>
 #include <xrpl/protocol/Feature.h>
+#include <xrpl/protocol/Protocol.h>
 #include <xrpl/protocol/SField.h>
 #include <xrpl/protocol/STNumber.h>
 #include <xrpl/protocol/TER.h>
 #include <xrpl/protocol/TxFlags.h>
 
 namespace xrpl {
+
+static constexpr std::int64_t MICRO_DROPS_PER_DROP_W = 1'000'000;
+
+bool
+VaultWithdraw::checkExtraFeatures(PreflightContext const& ctx)
+{
+    if (ctx.tx.isFieldPresent(sfComputationAllowance) &&
+        !ctx.rules.enabled(featureSmartVault))
+        return false;
+    return true;
+}
+
+XRPAmount
+VaultWithdraw::calculateBaseFee(ReadView const& view, STTx const& tx)
+{
+    auto baseFee = Transactor::calculateBaseFee(view, tx);
+
+    if (auto const allowance = tx[~sfComputationAllowance])
+    {
+        auto const& fees = view.fees();
+        auto const gasPrice = fees.gas_price;
+        baseFee += XRPAmount{
+            static_cast<XRPAmount::value_type>(
+                (*allowance * gasPrice) / MICRO_DROPS_PER_DROP_W + 1)};
+    }
+
+    return baseFee;
+}
 
 NotTEC
 VaultWithdraw::preflight(PreflightContext const& ctx)
@@ -41,6 +72,14 @@ VaultWithdraw::preclaim(PreclaimContext const& ctx)
     if (!vault)
         return tecNO_ENTRY;
 
+    // WASM policy requires ComputationAllowance; non-WASM rejects it
+    bool const isWASM =
+        vault->at(sfWithdrawalPolicy) == vaultStrategyWASM;
+    if (isWASM && !ctx.tx.isFieldPresent(sfComputationAllowance))
+        return tefWASM_FIELD_NOT_INCLUDED;
+    if (!isWASM && ctx.tx.isFieldPresent(sfComputationAllowance))
+        return tefNO_WASM;
+
     auto const assets = ctx.tx[sfAmount];
     auto const vaultAsset = vault->at(sfAsset);
     auto const vaultShare = vault->at(sfShareMPTID);
@@ -59,7 +98,8 @@ VaultWithdraw::preclaim(PreclaimContext const& ctx)
     }
 
     // Enforce valid withdrawal policy
-    if (vault->at(sfWithdrawalPolicy) != vaultStrategyFirstComeFirstServe)
+    if (vault->at(sfWithdrawalPolicy) != vaultStrategyFirstComeFirstServe &&
+        vault->at(sfWithdrawalPolicy) != vaultStrategyWASM)
     {
         // LCOV_EXCL_START
         JLOG(ctx.j.error()) << "VaultWithdraw: invalid withdrawal policy.";
@@ -97,6 +137,56 @@ VaultWithdraw::doApply()
     auto const vault = view().peek(keylet::vault(ctx_.tx[sfVaultID]));
     if (!vault)
         return tefINTERNAL;  // LCOV_EXCL_LINE
+
+    auto const amount = ctx_.tx[sfAmount];
+
+    // WASM withdrawal path: run on_withdraw, transfer assets directly
+    if (vault->at(sfWithdrawalPolicy) == vaultStrategyWASM)
+    {
+        auto const& wasmCode = vault->getFieldVL(sfVaultCode);
+        auto const vaultKey = keylet::vault(ctx_.tx[sfVaultID]);
+        WasmHostFunctionsImpl hfs(ctx_, vaultKey);
+        auto const gasLimit = static_cast<int64_t>(
+            ctx_.tx[sfComputationAllowance]);
+
+        auto const result = runEscrowWasm(
+            wasmCode, hfs, VAULT_WITHDRAW_FUNCTION, {}, gasLimit);
+        if (!result)
+            return result.error();
+
+        auto const& [retVal, gasUsed] = *result;
+
+        // Persist updated data from WASM
+        if (auto const& data = hfs.getData())
+        {
+            auto vaultMut = view().peek(vaultKey);
+            vaultMut->setFieldVL(sfData, *data);
+            view().update(vaultMut);
+        }
+
+        // Set metadata
+        ctx_.setWasmReturnCode(retVal);
+        ctx_.setGasUsed(gasUsed);
+
+        if (retVal <= 0)
+            return tecWASM_REJECTED;
+
+        // Direct asset transfer for WASM vaults (no shares)
+        auto const& vaultAccount = vault->at(sfAccount);
+        auto const destination = ctx_.tx[~sfDestination].value_or(account_);
+
+        vault->at(sfAssetsTotal) -= amount;
+        vault->at(sfAssetsAvailable) -= amount;
+        view().update(vault);
+
+        if (auto const ter = accountSend(
+                view(), vaultAccount, destination, amount, j_,
+                WaiveTransferFee::Yes);
+            !isTesSuccess(ter))
+            return ter;
+
+        return tesSUCCESS;
+    }
 
     auto const mptIssuanceID = *((*vault)[sfShareMPTID]);
     auto const sleIssuance = view().read(keylet::mptIssuance(mptIssuanceID));

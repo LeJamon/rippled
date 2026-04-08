@@ -17,6 +17,8 @@ static std::string_view const W_DEALLOC = "deallocate";
 static std::string_view const W_PROC_EXIT = "proc_exit";
 
 static std::string_view const ESCROW_FUNCTION_NAME = "finish";
+static std::string_view const VAULT_DEPOSIT_FUNCTION = "on_deposit";
+static std::string_view const VAULT_WITHDRAW_FUNCTION = "on_withdraw";
 
 uint32_t const MAX_PAGES = 128;  // 8MB = 64KB*128
 

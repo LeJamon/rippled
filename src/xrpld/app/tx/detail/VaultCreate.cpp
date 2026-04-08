@@ -1,6 +1,8 @@
 #include <xrpld/app/tx/detail/MPTokenAuthorize.h>
 #include <xrpld/app/tx/detail/MPTokenIssuanceCreate.h>
 #include <xrpld/app/tx/detail/VaultCreate.h>
+#include <xrpld/app/wasm/HostFuncImpl.h>
+#include <xrpld/app/wasm/WasmVM.h>
 
 #include <xrpl/ledger/View.h>
 #include <xrpl/protocol/Asset.h>
@@ -16,6 +18,14 @@
 
 namespace xrpl {
 
+std::int32_t
+vaultReserveIncrements(std::optional<Slice> const& vaultCode)
+{
+    if (!vaultCode)
+        return 1;
+    return 1 + static_cast<std::int32_t>(vaultCode->size()) / 500;
+}
+
 bool
 VaultCreate::checkExtraFeatures(PreflightContext const& ctx)
 {
@@ -24,6 +34,11 @@ VaultCreate::checkExtraFeatures(PreflightContext const& ctx)
 
     if (ctx.tx.isFieldPresent(sfDomainID) &&
         !ctx.rules.enabled(featurePermissionedDomains))
+        return false;
+
+    if ((ctx.tx.isFieldPresent(sfVaultCode) ||
+         ctx.tx[~sfWithdrawalPolicy] == vaultStrategyWASM) &&
+        !ctx.rules.enabled(featureSmartVault))
         return false;
 
     return true;
@@ -44,8 +59,40 @@ VaultCreate::preflight(PreflightContext const& ctx)
     if (auto const withdrawalPolicy = ctx.tx[~sfWithdrawalPolicy])
     {
         // Enforce valid withdrawal policy
-        if (*withdrawalPolicy != vaultStrategyFirstComeFirstServe)
+        if (*withdrawalPolicy != vaultStrategyFirstComeFirstServe &&
+            *withdrawalPolicy != vaultStrategyWASM)
             return temMALFORMED;
+
+        // WASM policy requires VaultCode and vice versa
+        bool const hasVaultCode = ctx.tx.isFieldPresent(sfVaultCode);
+        if (*withdrawalPolicy == vaultStrategyWASM && !hasVaultCode)
+            return temMALFORMED;
+        if (hasVaultCode && *withdrawalPolicy != vaultStrategyWASM)
+            return temMALFORMED;
+    }
+
+    // Validate WASM bytecode if present
+    if (ctx.tx.isFieldPresent(sfVaultCode))
+    {
+        auto const& code = ctx.tx.getFieldVL(sfVaultCode);
+        if (code.empty())
+            return temMALFORMED;
+
+        auto const maxSize =
+            ctx.app.config().FEES.extension_size_limit;
+        if (maxSize && code.size() > *maxSize)
+            return temMALFORMED;
+
+        // Validate WASM exports "on_deposit" and "on_withdraw"
+        WasmHostFunctionsImpl hfs(beast::Journal{beast::Journal::getNullSink()});
+        if (auto const tec = preflightEscrowWasm(
+                code, hfs, VAULT_DEPOSIT_FUNCTION);
+            tec != tesSUCCESS)
+            return tec;
+        if (auto const tec = preflightEscrowWasm(
+                code, hfs, VAULT_WITHDRAW_FUNCTION);
+            tec != tesSUCCESS)
+            return tec;
     }
 
     if (auto const domain = ctx.tx[~sfDomainID])
@@ -80,6 +127,22 @@ VaultCreate::preflight(PreflightContext const& ctx)
     }
 
     return tesSUCCESS;
+}
+
+XRPAmount
+VaultCreate::calculateBaseFee(ReadView const& view, STTx const& tx)
+{
+    auto baseFee = calculateOwnerReserveFee(view, tx);
+
+    if (tx.isFieldPresent(sfVaultCode))
+    {
+        auto const& code = tx.getFieldVL(sfVaultCode);
+        baseFee += XRPAmount{
+            static_cast<XRPAmount::value_type>(
+                9 * view.fees().base + 5 * code.size())};
+    }
+
+    return baseFee;
 }
 
 TER
@@ -138,8 +201,11 @@ VaultCreate::doApply()
 
     if (auto ter = dirLink(view(), account_, vault))
         return ter;
-    // We will create Vault and PseudoAccount, hence increase OwnerCount by 2
-    adjustOwnerCount(view(), owner, 2, j_);
+    // Variable reserve: plain vault = 1 increment + 1 for pseudo account,
+    // WASM vault adds increments based on code size
+    auto const reserveIncrements =
+        1 + vaultReserveIncrements(tx[~sfVaultCode]);
+    adjustOwnerCount(view(), owner, reserveIncrements, j_);
     auto const ownerCount = owner->at(sfOwnerCount);
     if (mPriorBalance < view().fees().accountReserve(ownerCount))
         return tecINSUFFICIENT_RESERVE;
@@ -209,6 +275,8 @@ VaultCreate::doApply()
         vault->at(sfWithdrawalPolicy) = vaultStrategyFirstComeFirstServe;
     if (scale)
         vault->at(sfScale) = scale;
+    if (auto value = tx[~sfVaultCode])
+        vault->at(sfVaultCode) = *value;
     view().insert(vault);
 
     // Explicitly create MPToken for the vault owner

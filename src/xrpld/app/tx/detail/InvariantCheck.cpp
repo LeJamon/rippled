@@ -13,6 +13,7 @@
 #include <xrpl/protocol/Indexes.h>
 #include <xrpl/protocol/LedgerFormats.h>
 #include <xrpl/protocol/MPTIssue.h>
+#include <xrpl/protocol/Protocol.h>
 #include <xrpl/protocol/SField.h>
 #include <xrpl/protocol/STArray.h>
 #include <xrpl/protocol/STNumber.h>
@@ -2629,6 +2630,7 @@ ValidVault::Vault::make(SLE const& from)
     self.assetsAvailable = from.at(sfAssetsAvailable);
     self.assetsMaximum = from.at(sfAssetsMaximum);
     self.lossUnrealized = from.at(sfLossUnrealized);
+    self.withdrawalPolicy = from.at(sfWithdrawalPolicy);
     return self;
 }
 
@@ -2999,7 +3001,11 @@ ValidVault::finalize(
         return std::nullopt;
     }();
 
-    if (!beforeShares &&
+    bool const isWASMPolicy =
+        !afterVault_.empty() &&
+        afterVault_.front().withdrawalPolicy == vaultStrategyWASM;
+
+    if (!beforeShares && !isWASMPolicy &&
         (tx.getTxnType() == ttVAULT_DEPOSIT ||   //
          tx.getTxnType() == ttVAULT_WITHDRAW ||  //
          tx.getTxnType() == ttVAULT_CLAWBACK))
@@ -3261,37 +3267,41 @@ ValidVault::finalize(
                     result = false;
                 }
 
-                auto const accountDeltaShares = deltaShares(tx[sfAccount]);
-                if (!accountDeltaShares)
+                // WASM vaults skip share-based invariants (no shares issued)
+                if (!isWASMPolicy)
                 {
-                    JLOG(j.fatal()) <<  //
-                        "Invariant failed: deposit must change depositor "
-                        "shares";
-                    return false;  // That's all we can do
-                }
+                    auto const accountDeltaShares = deltaShares(tx[sfAccount]);
+                    if (!accountDeltaShares)
+                    {
+                        JLOG(j.fatal()) <<  //
+                            "Invariant failed: deposit must change depositor "
+                            "shares";
+                        return false;  // That's all we can do
+                    }
 
-                if (*accountDeltaShares <= zero)
-                {
-                    JLOG(j.fatal()) <<  //
-                        "Invariant failed: deposit must increase depositor "
-                        "shares";
-                    result = false;
-                }
+                    if (*accountDeltaShares <= zero)
+                    {
+                        JLOG(j.fatal()) <<  //
+                            "Invariant failed: deposit must increase depositor "
+                            "shares";
+                        result = false;
+                    }
 
-                auto const vaultDeltaShares = deltaShares(afterVault.pseudoId);
-                if (!vaultDeltaShares || *vaultDeltaShares == zero)
-                {
-                    JLOG(j.fatal()) <<  //
-                        "Invariant failed: deposit must change vault shares";
-                    return false;  // That's all we can do
-                }
+                    auto const vaultDeltaShares = deltaShares(afterVault.pseudoId);
+                    if (!vaultDeltaShares || *vaultDeltaShares == zero)
+                    {
+                        JLOG(j.fatal()) <<  //
+                            "Invariant failed: deposit must change vault shares";
+                        return false;  // That's all we can do
+                    }
 
-                if (*vaultDeltaShares * -1 != *accountDeltaShares)
-                {
-                    JLOG(j.fatal()) <<  //
-                        "Invariant failed: deposit must change depositor and "
-                        "vault shares by equal amount";
-                    result = false;
+                    if (*vaultDeltaShares * -1 != *accountDeltaShares)
+                    {
+                        JLOG(j.fatal()) <<  //
+                            "Invariant failed: deposit must change depositor and "
+                            "vault shares by equal amount";
+                        result = false;
+                    }
                 }
 
                 if (beforeVault.assetsTotal + *vaultDeltaAssets !=
@@ -3387,37 +3397,41 @@ ValidVault::finalize(
                     }
                 }
 
-                auto const accountDeltaShares = deltaShares(tx[sfAccount]);
-                if (!accountDeltaShares)
+                // WASM vaults skip share-based invariants (no shares issued)
+                if (!isWASMPolicy)
                 {
-                    JLOG(j.fatal()) <<  //
-                        "Invariant failed: withdrawal must change depositor "
-                        "shares";
-                    return false;
-                }
+                    auto const accountDeltaShares = deltaShares(tx[sfAccount]);
+                    if (!accountDeltaShares)
+                    {
+                        JLOG(j.fatal()) <<  //
+                            "Invariant failed: withdrawal must change depositor "
+                            "shares";
+                        return false;
+                    }
 
-                if (*accountDeltaShares >= zero)
-                {
-                    JLOG(j.fatal()) <<  //
-                        "Invariant failed: withdrawal must decrease depositor "
-                        "shares";
-                    result = false;
-                }
+                    if (*accountDeltaShares >= zero)
+                    {
+                        JLOG(j.fatal()) <<  //
+                            "Invariant failed: withdrawal must decrease depositor "
+                            "shares";
+                        result = false;
+                    }
 
-                auto const vaultDeltaShares = deltaShares(afterVault.pseudoId);
-                if (!vaultDeltaShares || *vaultDeltaShares == zero)
-                {
-                    JLOG(j.fatal()) <<  //
-                        "Invariant failed: withdrawal must change vault shares";
-                    return false;  // That's all we can do
-                }
+                    auto const vaultDeltaShares = deltaShares(afterVault.pseudoId);
+                    if (!vaultDeltaShares || *vaultDeltaShares == zero)
+                    {
+                        JLOG(j.fatal()) <<  //
+                            "Invariant failed: withdrawal must change vault shares";
+                        return false;  // That's all we can do
+                    }
 
-                if (*vaultDeltaShares * -1 != *accountDeltaShares)
-                {
-                    JLOG(j.fatal()) <<  //
-                        "Invariant failed: withdrawal must change depositor "
-                        "and vault shares by equal amount";
-                    result = false;
+                    if (*vaultDeltaShares * -1 != *accountDeltaShares)
+                    {
+                        JLOG(j.fatal()) <<  //
+                            "Invariant failed: withdrawal must change depositor "
+                            "and vault shares by equal amount";
+                        result = false;
+                    }
                 }
 
                 // Note, vaultBalance is negative (see check above)

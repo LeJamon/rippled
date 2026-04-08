@@ -1,5 +1,7 @@
 #include <xrpld/app/tx/detail/MPTokenAuthorize.h>
 #include <xrpld/app/tx/detail/VaultDeposit.h>
+#include <xrpld/app/wasm/HostFuncImpl.h>
+#include <xrpld/app/wasm/WasmVM.h>
 
 #include <xrpl/ledger/CredentialHelpers.h>
 #include <xrpl/ledger/View.h>
@@ -7,12 +9,41 @@
 #include <xrpl/protocol/Indexes.h>
 #include <xrpl/protocol/LedgerFormats.h>
 #include <xrpl/protocol/MPTIssue.h>
+#include <xrpl/protocol/Protocol.h>
 #include <xrpl/protocol/SField.h>
 #include <xrpl/protocol/STNumber.h>
 #include <xrpl/protocol/TER.h>
 #include <xrpl/protocol/TxFlags.h>
 
 namespace xrpl {
+
+static constexpr std::int64_t MICRO_DROPS_PER_DROP = 1'000'000;
+
+bool
+VaultDeposit::checkExtraFeatures(PreflightContext const& ctx)
+{
+    if (ctx.tx.isFieldPresent(sfComputationAllowance) &&
+        !ctx.rules.enabled(featureSmartVault))
+        return false;
+    return true;
+}
+
+XRPAmount
+VaultDeposit::calculateBaseFee(ReadView const& view, STTx const& tx)
+{
+    auto baseFee = Transactor::calculateBaseFee(view, tx);
+
+    if (auto const allowance = tx[~sfComputationAllowance])
+    {
+        auto const& fees = view.fees();
+        auto const gasPrice = fees.gas_price;
+        baseFee += XRPAmount{
+            static_cast<XRPAmount::value_type>(
+                (*allowance * gasPrice) / MICRO_DROPS_PER_DROP + 1)};
+    }
+
+    return baseFee;
+}
 
 NotTEC
 VaultDeposit::preflight(PreflightContext const& ctx)
@@ -35,6 +66,14 @@ VaultDeposit::preclaim(PreclaimContext const& ctx)
     auto const vault = ctx.view.read(keylet::vault(ctx.tx[sfVaultID]));
     if (!vault)
         return tecNO_ENTRY;
+
+    // WASM policy requires ComputationAllowance; non-WASM rejects it
+    bool const isWASM =
+        vault->at(sfWithdrawalPolicy) == vaultStrategyWASM;
+    if (isWASM && !ctx.tx.isFieldPresent(sfComputationAllowance))
+        return tefWASM_FIELD_NOT_INCLUDED;
+    if (!isWASM && ctx.tx.isFieldPresent(sfComputationAllowance))
+        return tefNO_WASM;
 
     auto const& account = ctx.tx[sfAccount];
     auto const assets = ctx.tx[sfAmount];
@@ -138,6 +177,53 @@ VaultDeposit::doApply()
         return tefINTERNAL;  // LCOV_EXCL_LINE
 
     auto const amount = ctx_.tx[sfAmount];
+
+    // WASM deposit path: run on_deposit, transfer assets directly
+    if (vault->at(sfWithdrawalPolicy) == vaultStrategyWASM)
+    {
+        auto const& wasmCode = vault->getFieldVL(sfVaultCode);
+        auto const vaultKey = keylet::vault(ctx_.tx[sfVaultID]);
+        WasmHostFunctionsImpl hfs(ctx_, vaultKey);
+        auto const gasLimit = static_cast<int64_t>(
+            ctx_.tx[sfComputationAllowance]);
+
+        auto const result = runEscrowWasm(
+            wasmCode, hfs, VAULT_DEPOSIT_FUNCTION, {}, gasLimit);
+        if (!result)
+            return result.error();
+
+        auto const& [retVal, gasUsed] = *result;
+
+        // Persist updated data from WASM
+        if (auto const& data = hfs.getData())
+        {
+            auto vaultMut = view().peek(vaultKey);
+            vaultMut->setFieldVL(sfData, *data);
+            view().update(vaultMut);
+        }
+
+        // Set metadata
+        ctx_.setWasmReturnCode(retVal);
+        ctx_.setGasUsed(gasUsed);
+
+        if (retVal <= 0)
+            return tecWASM_REJECTED;
+
+        // Direct asset transfer for WASM vaults (no shares)
+        auto const& vaultAccount = vault->at(sfAccount);
+        vault->at(sfAssetsTotal) += amount;
+        vault->at(sfAssetsAvailable) += amount;
+        view().update(vault);
+
+        if (auto const ter = accountSend(
+                view(), account_, vaultAccount, amount, j_,
+                WaiveTransferFee::Yes);
+            !isTesSuccess(ter))
+            return ter;
+
+        return tesSUCCESS;
+    }
+
     // Make sure the depositor can hold shares.
     auto const mptIssuanceID = (*vault)[sfShareMPTID];
     auto const sleIssuance = view().read(keylet::mptIssuance(mptIssuanceID));

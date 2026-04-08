@@ -866,6 +866,7 @@ class ValidVault
         Number assetsAvailable = 0;
         Number assetsMaximum = 0;
         Number lossUnrealized = 0;
+        std::uint8_t withdrawalPolicy = 0;
 
         Vault static make(SLE const&);
     };

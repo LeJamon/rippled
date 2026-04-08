@@ -1,3 +1,4 @@
+#include <xrpld/app/tx/detail/VaultCreate.h>
 #include <xrpld/app/tx/detail/VaultDelete.h>
 
 #include <xrpl/ledger/View.h>
@@ -199,8 +200,10 @@ VaultDelete::doApply()
         // LCOV_EXCL_STOP
     }
 
-    // We are destroying Vault and PseudoAccount, hence decrease by 2
-    adjustOwnerCount(view(), owner, -2, j_);
+    // Variable reserve: 1 for pseudo-account + increments based on VaultCode
+    adjustOwnerCount(
+        view(), owner,
+        -(1 + vaultReserveIncrements((*vault)[~sfVaultCode])), j_);
 
     // Destroy the vault.
     view().erase(vault);

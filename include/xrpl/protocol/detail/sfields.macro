@@ -296,6 +296,7 @@ TYPED_SFIELD(sfCredentialType,           VL,        31)
 TYPED_SFIELD(sfFinishFunction,           VL,        32)
 TYPED_SFIELD(sfContractCode,             VL,        33)
 TYPED_SFIELD(sfFunctionName,             VL,        34)
+TYPED_SFIELD(sfVaultCode,               VL,        35)
 
 // account (common)
 TYPED_SFIELD(sfAccount,                  ACCOUNT,    1)

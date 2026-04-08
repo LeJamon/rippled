@@ -18,7 +18,8 @@
 
 XRPL_FEATURE(Quantum,                    Supported::yes, VoteBehavior::DefaultNo)
 XRPL_FEATURE(SmartContract,              Supported::yes, VoteBehavior::DefaultNo)
-XRPL_FEATURE(SmartEscrow,                Supported::no,  VoteBehavior::DefaultNo)
+XRPL_FEATURE(SmartEscrow,                Supported::yes, VoteBehavior::DefaultNo)
+XRPL_FEATURE(SmartVault,                 Supported::yes, VoteBehavior::DefaultNo)
 XRPL_FEATURE(LendingProtocol,            Supported::no,  VoteBehavior::DefaultNo)
 XRPL_FEATURE(PermissionDelegationV1_1,   Supported::no,  VoteBehavior::DefaultNo)
 XRPL_FIX    (DirectoryLimit,             Supported::yes, VoteBehavior::DefaultNo)
