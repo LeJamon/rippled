@@ -87,6 +87,11 @@ setCommonHostFunctions(HostFunctions* hfs, ImportVec& i)
     WASM_IMPORT_FUNC2(i, floatPower, "float_pow", hfs,                                                       5'500);
     WASM_IMPORT_FUNC2(i, floatLog, "float_log", hfs,                                                        12'000);
 
+    WASM_IMPORT_FUNC2(i, bn254AddHelper, "bn254_add_helper", hfs,                                                500);
+    WASM_IMPORT_FUNC2(i, bn254MulHelper, "bn254_mul_helper", hfs,                                              6'000);
+    WASM_IMPORT_FUNC2(i, bn254NegHelper, "bn254_neg_helper", hfs,                                                500);
+    WASM_IMPORT_FUNC2(i, bn254PairingHelper, "bn254_pairing_helper", hfs,                                     40'000);
+
     WASM_IMPORT_FUNC2(i, instanceParam, "instance_param", hfs,                                                  70);
     WASM_IMPORT_FUNC2(i, functionParam, "function_param", hfs,                                                  70);
     WASM_IMPORT_FUNC2(i, getDataObjectField, "get_data_object_field", hfs,                                      70);

@@ -681,4 +681,28 @@ emitEvent_wrap(
     wasm_val_vec_t const* params,
     wasm_val_vec_t* results);
 
+// BN254 elliptic curve host function wrappers
+using bn254AddHelper_proto = int32_t(
+    uint8_t const*, int32_t, uint8_t const*, int32_t, uint8_t*, int32_t);
+wasm_trap_t*
+bn254AddHelper_wrap(
+    void* env, wasm_val_vec_t const* params, wasm_val_vec_t* results);
+
+using bn254MulHelper_proto = int32_t(
+    uint8_t const*, int32_t, uint8_t const*, int32_t, uint8_t*, int32_t);
+wasm_trap_t*
+bn254MulHelper_wrap(
+    void* env, wasm_val_vec_t const* params, wasm_val_vec_t* results);
+
+using bn254NegHelper_proto = int32_t(
+    uint8_t const*, int32_t, uint8_t*, int32_t);
+wasm_trap_t*
+bn254NegHelper_wrap(
+    void* env, wasm_val_vec_t const* params, wasm_val_vec_t* results);
+
+using bn254PairingHelper_proto = int32_t(uint8_t const*, int32_t);
+wasm_trap_t*
+bn254PairingHelper_wrap(
+    void* env, wasm_val_vec_t const* params, wasm_val_vec_t* results);
+
 }  // namespace xrpl

@@ -634,6 +634,35 @@ struct HostFunctions
         return Unexpected(HostFunctionError::INTERNAL);
     }
 
+    // BN254 elliptic curve operations (for ZK proof verification)
+    virtual Expected<Bytes, HostFunctionError>
+    bn254AddHelper(
+        Slice const& p1_uncompressed_be64,
+        Slice const& p2_uncompressed_be64)
+    {
+        return Unexpected(HostFunctionError::INTERNAL);
+    }
+
+    virtual Expected<Bytes, HostFunctionError>
+    bn254MulHelper(
+        Slice const& p1_uncompressed_be64,
+        Slice const& scalar_uncompressed_be32)
+    {
+        return Unexpected(HostFunctionError::INTERNAL);
+    }
+
+    virtual Expected<Bytes, HostFunctionError>
+    bn254NegHelper(Slice const& p1_uncompressed_be64)
+    {
+        return Unexpected(HostFunctionError::INTERNAL);
+    }
+
+    virtual Expected<int32_t, HostFunctionError>
+    bn254PairingHelper(Slice const& pairs)
+    {
+        return Unexpected(HostFunctionError::INTERNAL);
+    }
+
     virtual ~HostFunctions() = default;
     // LCOV_EXCL_STOP
 };

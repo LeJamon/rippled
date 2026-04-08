@@ -92,6 +92,50 @@ set_target_properties(OpenSSL::SSL PROPERTIES
 )
 
 add_subdirectory(external/antithesis-sdk)
+add_subdirectory(external/libff)
+add_library(libff::ff ALIAS ff)
+
+# Silence libff compiler warnings
+target_include_directories(ff SYSTEM PRIVATE
+  ${CMAKE_SOURCE_DIR}/external/libff/src
+  ${CMAKE_SOURCE_DIR}/external/libff/depends/xbyak/xbyak
+  ${CMAKE_SOURCE_DIR}/external/libff/depends/ate-pairing/include
+)
+if (CMAKE_CXX_COMPILER_ID MATCHES "GNU")
+  target_compile_options(ff PRIVATE -Wno-array-bounds -Wno-stringop-overflow -fno-strict-aliasing)
+elseif (CMAKE_CXX_COMPILER_ID MATCHES "Clang")
+  target_compile_options(ff PRIVATE -Wno-array-bounds)
+endif()
+
+# GMP/GMPXX required by libff for finite field arithmetic
+find_package(GMP CONFIG QUIET)
+if (NOT TARGET GMP::gmp)
+  find_package(PkgConfig QUIET)
+  if (PkgConfig_FOUND)
+    pkg_check_modules(PC_GMP QUIET gmp)
+    pkg_check_modules(PC_GMPXX QUIET gmpxx)
+  endif()
+  find_path(GMP_INCLUDE_DIR NAMES gmp.h HINTS ${PC_GMP_INCLUDE_DIRS} ${PC_GMPXX_INCLUDE_DIRS})
+  find_library(GMP_LIBRARY NAMES gmp HINTS ${PC_GMP_LIBRARY_DIRS})
+  find_library(GMPXX_LIBRARY NAMES gmpxx HINTS ${PC_GMPXX_LIBRARY_DIRS} ${PC_GMP_LIBRARY_DIRS})
+  if (GMP_INCLUDE_DIR AND GMP_LIBRARY)
+    add_library(GMP::gmp UNKNOWN IMPORTED)
+    set_target_properties(GMP::gmp PROPERTIES
+      IMPORTED_LOCATION "${GMP_LIBRARY}"
+      INTERFACE_INCLUDE_DIRECTORIES "${GMP_INCLUDE_DIR}")
+  endif()
+  if (GMP_INCLUDE_DIR AND GMPXX_LIBRARY)
+    add_library(GMP::gmpxx UNKNOWN IMPORTED)
+    set_target_properties(GMP::gmpxx PROPERTIES
+      IMPORTED_LOCATION "${GMPXX_LIBRARY}"
+      INTERFACE_INCLUDE_DIRECTORIES "${GMP_INCLUDE_DIR}"
+      INTERFACE_LINK_LIBRARIES GMP::gmp)
+  endif()
+endif()
+if (NOT TARGET GMP::gmp OR NOT TARGET GMP::gmpxx)
+  message(FATAL_ERROR "GMP/GMPXX not found. Install libgmp-dev or set CMAKE_PREFIX_PATH.")
+endif()
+
 find_package(gRPC REQUIRED)
 find_package(lz4 REQUIRED)
 # Target names with :: are not allowed in a generator expression.
@@ -125,6 +169,9 @@ target_link_libraries(xrpl_libs INTERFACE
   secp256k1::secp256k1
   soci::soci
   SQLite::SQLite3
+  libff::ff
+  GMP::gmp
+  GMP::gmpxx
 )
 
 # Work around changes to Conan recipe for now.
