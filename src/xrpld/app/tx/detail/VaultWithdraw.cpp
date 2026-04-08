@@ -5,6 +5,7 @@
 #include <xrpl/ledger/CredentialHelpers.h>
 #include <xrpl/ledger/View.h>
 #include <xrpl/protocol/AccountID.h>
+#include <xrpl/protocol/Fees.h>
 #include <xrpl/protocol/Feature.h>
 #include <xrpl/protocol/Protocol.h>
 #include <xrpl/protocol/SField.h>
@@ -13,8 +14,6 @@
 #include <xrpl/protocol/TxFlags.h>
 
 namespace xrpl {
-
-static constexpr std::int64_t MICRO_DROPS_PER_DROP_W = 1'000'000;
 
 bool
 VaultWithdraw::checkExtraFeatures(PreflightContext const& ctx)
@@ -33,10 +32,10 @@ VaultWithdraw::calculateBaseFee(ReadView const& view, STTx const& tx)
     if (auto const allowance = tx[~sfComputationAllowance])
     {
         auto const& fees = view.fees();
-        auto const gasPrice = fees.gas_price;
+        auto const gasPrice = fees.gasPrice;
         baseFee += XRPAmount{
             static_cast<XRPAmount::value_type>(
-                (*allowance * gasPrice) / MICRO_DROPS_PER_DROP_W + 1)};
+                (*allowance * gasPrice) / MICRO_DROPS_PER_DROP + 1)};
     }
 
     return baseFee;
@@ -138,11 +137,10 @@ VaultWithdraw::doApply()
     if (!vault)
         return tefINTERNAL;  // LCOV_EXCL_LINE
 
-    auto const amount = ctx_.tx[sfAmount];
-
     // WASM withdrawal path: run on_withdraw, transfer assets directly
     if (vault->at(sfWithdrawalPolicy) == vaultStrategyWASM)
     {
+        auto const amount = ctx_.tx[sfAmount];
         auto const& wasmCode = vault->getFieldVL(sfVaultCode);
         auto const vaultKey = keylet::vault(ctx_.tx[sfVaultID]);
         WasmHostFunctionsImpl hfs(ctx_, vaultKey);

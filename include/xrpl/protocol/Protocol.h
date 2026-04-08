@@ -237,9 +237,6 @@ std::uint64_t constexpr maxMPTokenAmount = 0x7FFF'FFFF'FFFF'FFFFull;
 /** The maximum length of Data payload */
 std::size_t constexpr maxDataPayloadLength = 256;
 
-/** The maximum length of Data payload for WASM vaults */
-std::size_t constexpr maxWasmDataLength = 4096;
-
 /** Vault withdrawal policies */
 std::uint8_t constexpr vaultStrategyFirstComeFirstServe = 1;
 std::uint8_t constexpr vaultStrategyWASM = 2;

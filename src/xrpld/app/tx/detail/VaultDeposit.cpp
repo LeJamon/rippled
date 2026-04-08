@@ -5,6 +5,7 @@
 
 #include <xrpl/ledger/CredentialHelpers.h>
 #include <xrpl/ledger/View.h>
+#include <xrpl/protocol/Fees.h>
 #include <xrpl/protocol/Feature.h>
 #include <xrpl/protocol/Indexes.h>
 #include <xrpl/protocol/LedgerFormats.h>
@@ -16,8 +17,6 @@
 #include <xrpl/protocol/TxFlags.h>
 
 namespace xrpl {
-
-static constexpr std::int64_t MICRO_DROPS_PER_DROP = 1'000'000;
 
 bool
 VaultDeposit::checkExtraFeatures(PreflightContext const& ctx)
@@ -36,7 +35,7 @@ VaultDeposit::calculateBaseFee(ReadView const& view, STTx const& tx)
     if (auto const allowance = tx[~sfComputationAllowance])
     {
         auto const& fees = view.fees();
-        auto const gasPrice = fees.gas_price;
+        auto const gasPrice = fees.gasPrice;
         baseFee += XRPAmount{
             static_cast<XRPAmount::value_type>(
                 (*allowance * gasPrice) / MICRO_DROPS_PER_DROP + 1)};

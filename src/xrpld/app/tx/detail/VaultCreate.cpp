@@ -1,7 +1,7 @@
 #include <xrpld/app/tx/detail/MPTokenAuthorize.h>
 #include <xrpld/app/tx/detail/MPTokenIssuanceCreate.h>
 #include <xrpld/app/tx/detail/VaultCreate.h>
-#include <xrpld/app/wasm/HostFuncImpl.h>
+#include <xrpld/app/wasm/HostFunc.h>
 #include <xrpld/app/wasm/WasmVM.h>
 
 #include <xrpl/ledger/View.h>
@@ -80,11 +80,11 @@ VaultCreate::preflight(PreflightContext const& ctx)
 
         auto const maxSize =
             ctx.app.config().FEES.extension_size_limit;
-        if (maxSize && code.size() > *maxSize)
+        if (maxSize > 0 && code.size() > maxSize)
             return temMALFORMED;
 
         // Validate WASM exports "on_deposit" and "on_withdraw"
-        WasmHostFunctionsImpl hfs(beast::Journal{beast::Journal::getNullSink()});
+        HostFunctions hfs(ctx.j);
         if (auto const tec = preflightEscrowWasm(
                 code, hfs, VAULT_DEPOSIT_FUNCTION);
             tec != tesSUCCESS)
@@ -137,9 +137,8 @@ VaultCreate::calculateBaseFee(ReadView const& view, STTx const& tx)
     if (tx.isFieldPresent(sfVaultCode))
     {
         auto const& code = tx.getFieldVL(sfVaultCode);
-        baseFee += XRPAmount{
-            static_cast<XRPAmount::value_type>(
-                9 * view.fees().base + 5 * code.size())};
+        baseFee += view.fees().base * 9 +
+            XRPAmount{static_cast<XRPAmount::value_type>(5 * code.size())};
     }
 
     return baseFee;
