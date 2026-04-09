@@ -36,17 +36,13 @@ RUN cargo install cbindgen
 RUN pipx install conan && pipx ensurepath
 ENV PATH="/root/.local/bin:${PATH}"
 
-# Write a static conan profile (skip auto-detection which fails in Docker)
-RUN mkdir -p /root/.conan2/profiles && printf '\
-[settings]\n\
-os=Linux\n\
-arch=armv8\n\
-build_type=Release\n\
-compiler=gcc\n\
-compiler.version=13\n\
-compiler.cppstd=20\n\
-compiler.libcxx=libstdc++11\n\
-' > /root/.conan2/profiles/default
+# Write a static conan profile (skip Jinja2 auto-detection which fails in Docker)
+# Detect arch at build time: dpkg --print-architecture gives amd64 or arm64
+RUN mkdir -p /root/.conan2/profiles && \
+    ARCH=$(dpkg --print-architecture) && \
+    if [ "$ARCH" = "arm64" ]; then CONAN_ARCH="armv8"; else CONAN_ARCH="x86_64"; fi && \
+    printf "[settings]\nos=Linux\narch=${CONAN_ARCH}\nbuild_type=Release\ncompiler=gcc\ncompiler.version=13\ncompiler.cppstd=20\ncompiler.libcxx=libstdc++11\n" \
+    > /root/.conan2/profiles/default
 
 # Add XRPL Conan remote (patched recipes for wasmi, grpc, etc.)
 RUN conan remote add --index 0 xrplf https://conan.ripplex.io
