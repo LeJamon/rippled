@@ -2908,7 +2908,9 @@ ValidVault::finalize(
         return !enforce;  // That's all we can do here
     }
 
-    if (updatedShares->sharesTotal == 0)
+    // WASM vaults hold assets without issuing shares, so zero shares
+    // with non-zero assets is expected.
+    if (updatedShares->sharesTotal == 0 && !isWASMPolicy)
     {
         if (afterVault.assetsTotal != zero)
         {
