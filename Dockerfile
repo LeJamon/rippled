@@ -30,29 +30,35 @@ RUN apt-get update && apt-get install -y \
 # Install Rust (required by wasmi)
 RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
 ENV PATH="/root/.cargo/bin:${PATH}"
-
-# Install cbindgen (needed by wasmi C API build)
 RUN cargo install cbindgen
 
 # Install Conan via pipx
 RUN pipx install conan && pipx ensurepath
 ENV PATH="/root/.local/bin:${PATH}"
 
-# Setup Conan
-RUN conan profile detect
+# Write a static conan profile (skip auto-detection which fails in Docker)
+RUN mkdir -p /root/.conan2/profiles && printf '\
+[settings]\n\
+os=Linux\n\
+arch=x86_64\n\
+build_type=Release\n\
+compiler=gcc\n\
+compiler.version=13\n\
+compiler.cppstd=20\n\
+compiler.libcxx=libstdc++11\n\
+' > /root/.conan2/profiles/default
 
-# Add XRPL Conan remote
+# Add XRPL Conan remote (patched recipes for wasmi, grpc, etc.)
 RUN conan remote add --index 0 xrplf https://conan.ripplex.io
 
 # Copy source code
 WORKDIR /rippled
 COPY . .
 
-# Install conan profiles
-RUN conan config install conan/profiles/ -tf $(conan config home)/profiles/ || true
-
-# Create build directory and install dependencies
-# First pass: download wasmi source (may fail on build, that's ok)
+# Download and patch wasmi source before building
+# The wasmi ExternalProject has an empty INSTALL_COMMAND that triggers
+# a default "make install" which fails with Error 127 in Docker.
+# We first run conan to download sources, then patch, then retry.
 SHELL ["/bin/bash", "-o", "pipefail", "-c"]
 RUN mkdir -p build && cd build && \
     conan install .. \
@@ -60,16 +66,9 @@ RUN mkdir -p build && cd build && \
         --build missing \
         --settings build_type=Release \
         --lockfile="" \
-    || true
-
-# Patch wasmi ExternalProject install command (Error 127 fix)
-# The empty WASMI_INSTALL_COMMAND variable triggers a default "make install"
-# which doesn't exist. Setting INSTALL_COMMAND to literally "" means "skip".
-RUN find /root/.conan2 -path "*/wasmi*/c_api/CMakeLists.txt" \
-    -exec sed -i 's/INSTALL_COMMAND "${WASMI_INSTALL_COMMAND}"/INSTALL_COMMAND ""/g' {} \;
-
-# Retry conan install after patching
-RUN cd build && \
+    || true && \
+    find /root/.conan2 -path "*/wasmi*/c_api/CMakeLists.txt" \
+        -exec sed -i 's|INSTALL_COMMAND "${WASMI_INSTALL_COMMAND}"|INSTALL_COMMAND ""|g' {} \; && \
     conan install .. \
         --output-folder . \
         --build missing \
