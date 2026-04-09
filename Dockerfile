@@ -87,8 +87,8 @@ RUN useradd -m -s /bin/bash rippled
 # Copy the binary
 COPY --from=builder /rippled/build/xrpld /usr/local/bin/rippled
 
-# Copy default config
-COPY --from=builder /rippled/cfg/rippled-example.cfg /etc/rippled/rippled.cfg
+# Copy standalone config
+COPY --from=builder /rippled/cfg/standalone.cfg /etc/rippled/rippled.cfg
 
 # Create data directories
 RUN mkdir -p /var/lib/rippled /var/log/rippled && \
