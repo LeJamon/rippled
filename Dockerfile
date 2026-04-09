@@ -21,7 +21,12 @@ RUN apt-get update && apt-get install -y \
     libgmpxx4ldbl \
     libssl-dev \
     libsodium-dev \
+    curl \
     && rm -rf /var/lib/apt/lists/*
+
+# Install Rust (required by wasmi)
+RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
+ENV PATH="/root/.cargo/bin:${PATH}"
 
 # Install Conan via pipx
 RUN pipx install conan && pipx ensurepath
@@ -41,13 +46,13 @@ COPY . .
 RUN conan config install conan/profiles/ -tf $(conan config home)/profiles/ || true
 
 # Create build directory and install dependencies
+SHELL ["/bin/bash", "-o", "pipefail", "-c"]
 RUN mkdir -p build && cd build && \
     conan install .. \
         --output-folder . \
         --build missing \
         --settings build_type=Release \
-        --lockfile="" \
-    2>&1 | tail -5
+        --lockfile=""
 
 # Configure CMake
 RUN cd build && \
@@ -56,11 +61,10 @@ RUN cd build && \
         -DCMAKE_BUILD_TYPE=Release \
         -Dxrpld=ON \
         -Dtests=OFF \
-        .. \
-    2>&1 | tail -5
+        ..
 
 # Build rippled
-RUN cd build && cmake --build . --parallel $(nproc) 2>&1 | tail -10
+RUN cd build && cmake --build . --parallel $(nproc)
 
 # Verify the binary was created
 RUN ls -la build/xrpld && build/xrpld --version
