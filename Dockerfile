@@ -52,8 +52,24 @@ COPY . .
 RUN conan config install conan/profiles/ -tf $(conan config home)/profiles/ || true
 
 # Create build directory and install dependencies
+# First pass: download wasmi source (may fail on build, that's ok)
 SHELL ["/bin/bash", "-o", "pipefail", "-c"]
 RUN mkdir -p build && cd build && \
+    conan install .. \
+        --output-folder . \
+        --build missing \
+        --settings build_type=Release \
+        --lockfile="" \
+    || true
+
+# Patch wasmi ExternalProject install command (Error 127 fix)
+# The empty WASMI_INSTALL_COMMAND variable triggers a default "make install"
+# which doesn't exist. Setting INSTALL_COMMAND to literally "" means "skip".
+RUN find /root/.conan2 -path "*/wasmi*/c_api/CMakeLists.txt" \
+    -exec sed -i 's/INSTALL_COMMAND "${WASMI_INSTALL_COMMAND}"/INSTALL_COMMAND ""/g' {} \;
+
+# Retry conan install after patching
+RUN cd build && \
     conan install .. \
         --output-folder . \
         --build missing \
