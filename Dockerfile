@@ -11,8 +11,11 @@ ENV DEBIAN_FRONTEND=noninteractive
 # Install build dependencies
 RUN apt-get update && apt-get install -y \
     build-essential \
+    binutils \
     cmake \
+    file \
     git \
+    ninja-build \
     pkg-config \
     python3 \
     python3-pip \
@@ -27,6 +30,9 @@ RUN apt-get update && apt-get install -y \
 # Install Rust (required by wasmi)
 RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
 ENV PATH="/root/.cargo/bin:${PATH}"
+
+# Install cbindgen (needed by wasmi C API build)
+RUN cargo install cbindgen
 
 # Install Conan via pipx
 RUN pipx install conan && pipx ensurepath
