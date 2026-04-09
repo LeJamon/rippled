@@ -1,0 +1,9 @@
+build/
+.git/
+*.o
+*.a
+*.so
+*.dylib
+.vscode/
+.idea/
+CMakeUserPresets.json
