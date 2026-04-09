@@ -87,14 +87,15 @@ RUN useradd -m -s /bin/bash rippled
 # Copy the binary
 COPY --from=builder /rippled/build/xrpld /usr/local/bin/rippled
 
-# Copy standalone config
-COPY --from=builder /rippled/cfg/standalone.cfg /etc/rippled/rippled.cfg
-
-# Create data directories
-RUN mkdir -p /var/lib/rippled /var/log/rippled && \
+# Create data and config directories
+RUN mkdir -p /var/lib/rippled /var/log/rippled /etc/rippled && \
     chown -R rippled:rippled /var/lib/rippled /var/log/rippled /etc/rippled
 
+# Ports: ws(6006) peer(51235) rpc(5005)
 EXPOSE 6006 51235 5005
+
+# Config is mounted at runtime — no default baked in
+VOLUME ["/etc/rippled", "/var/lib/rippled"]
 
 USER rippled
 WORKDIR /var/lib/rippled
