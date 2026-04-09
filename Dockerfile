@@ -4,7 +4,7 @@
 # ============================================================
 # Stage 1: Build
 # ============================================================
-FROM --platform=linux/amd64 ubuntu:24.04 AS builder
+FROM ubuntu:24.04 AS builder
 
 ENV DEBIAN_FRONTEND=noninteractive
 
@@ -40,7 +40,7 @@ ENV PATH="/root/.local/bin:${PATH}"
 RUN mkdir -p /root/.conan2/profiles && printf '\
 [settings]\n\
 os=Linux\n\
-arch=x86_64\n\
+arch=armv8\n\
 build_type=Release\n\
 compiler=gcc\n\
 compiler.version=13\n\
@@ -84,8 +84,9 @@ RUN cd build && \
         -Dtests=OFF \
         ..
 
-# Build rippled
-RUN cd build && cmake --build . --parallel $(nproc)
+# Build rippled (limit parallelism to avoid OOM with 8GB RAM)
+ARG BUILD_JOBS=4
+RUN cd build && cmake --build . --parallel ${BUILD_JOBS}
 
 # Verify the binary was created
 RUN ls -la build/xrpld && build/xrpld --version
@@ -93,7 +94,7 @@ RUN ls -la build/xrpld && build/xrpld --version
 # ============================================================
 # Stage 2: Runtime
 # ============================================================
-FROM --platform=linux/amd64 ubuntu:24.04 AS runtime
+FROM ubuntu:24.04 AS runtime
 
 ENV DEBIAN_FRONTEND=noninteractive
 

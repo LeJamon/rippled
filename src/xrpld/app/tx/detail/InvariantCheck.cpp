@@ -2861,6 +2861,8 @@ ValidVault::finalize(
 
     // Note, `afterVault_.empty()` is handled above
     auto const& afterVault = afterVault_[0];
+    bool const isWASMPolicy =
+        afterVault.withdrawalPolicy == vaultStrategyWASM;
     XRPL_ASSERT(
         beforeVault_.empty() || beforeVault_[0].key == afterVault.key,
         "xrpl::ValidVault::finalize : single vault operation");
@@ -3002,10 +3004,6 @@ ValidVault::finalize(
         }
         return std::nullopt;
     }();
-
-    bool const isWASMPolicy =
-        !afterVault_.empty() &&
-        afterVault_.front().withdrawalPolicy == vaultStrategyWASM;
 
     if (!beforeShares && !isWASMPolicy &&
         (tx.getTxnType() == ttVAULT_DEPOSIT ||   //

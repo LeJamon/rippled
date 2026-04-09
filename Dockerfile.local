@@ -1,0 +1,29 @@
+# Lightweight image using a pre-built binary
+# Usage: docker build -f Dockerfile.local -t rippled-alphanet:latest .
+FROM ubuntu:24.04
+
+ENV DEBIAN_FRONTEND=noninteractive
+
+RUN apt-get update && apt-get install -y \
+    libgmp10 \
+    libgmpxx4ldbl \
+    libsodium23 \
+    libssl3t64 \
+    ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+
+RUN useradd -m -s /bin/bash rippled
+
+COPY build/xrpld /usr/local/bin/rippled
+
+RUN mkdir -p /var/lib/rippled /var/log/rippled /etc/rippled && \
+    chown -R rippled:rippled /var/lib/rippled /var/log/rippled /etc/rippled
+
+EXPOSE 6006 51235 5005
+VOLUME ["/etc/rippled", "/var/lib/rippled"]
+
+USER rippled
+WORKDIR /var/lib/rippled
+
+ENTRYPOINT ["rippled"]
+CMD ["--conf", "/etc/rippled/rippled.cfg"]
